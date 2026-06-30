@@ -1,0 +1,167 @@
+DSplit — 连通区域面积周长分析系统
+│
+├─────────────────────────────────────────────────────────────
+│  【一、MFC 框架层（6 个类）】
+├─────────────────────────────────────────────────────────────
+│
+├── CDSplitApp          — 应用程序入口，MFC 初始化
+│
+├── CMainFrame          — 主框架窗口
+│   ├── 工具栏（二值化/面积/消除/周长/标记/保存）
+│   ├── 状态栏
+│   └── CDynSplitterWnd  — 动态分割窗口（可拖拽调整左右比例）
+│
+├── CDSplitDoc          — 文档类（数据容器）
+│   ├── CDib CDib            ← 原始 BMP 图像（只读，左视图显示用）
+│   ├── CProcessDib CDibNew  ← 处理工作副本（所有算法操作对象）
+│   └── OnFileopen()         → 加载 BMP 到两份图像
+│
+├── CDSplitView         — 左视图
+│   └── OnDraw()            → StretchDIBits 渲染原始 BMP
+│
+├── CDynSplitView2      — 右视图（交互核心）
+│   ├── clearmem()          → 从 CDib 恢复原图到 CDibNew
+│   ├── CalArea()           → 面积统计流程入口
+│   ├── OnDelSmall()        → 小区域消除流程入口
+│   ├── OnFollowline()      → 周长统计流程入口
+│   ├── OnA()               → 编号标记流程入口
+│   ├── OnFilesave()        → 保存处理结果
+│   └── OnDraw()            → StretchDIBits 渲染处理结果（支持24位无颜色表）
+│
+│
+├─────────────────────────────────────────────────────────────
+│  【二、数据层（2 个类，继承关系）】
+├─────────────────────────────────────────────────────────────
+│
+├── CDib (Cdib.h / CDIB.CPP)      — DIB 位图基类
+│   ├── LoadFile()      → 读取 BMP 文件，解析文件头/信息头/颜色表/像素数据
+│   ├── SaveFile()      → 写回 BMP 文件
+│   ├── GetWidth/Height/Data/Info/RGB()
+│   ├── GetDibWidthBytes() → 计算每行字节数（4字节对齐）
+│   └── 内部成员
+│       ├── m_pData             → 像素数据指针
+│       ├── m_pBitmapInfoHeader → BITMAPINFOHEADER (40字节，宽/高/位深)
+│       ├── m_pRGB              → 颜色表指针 (24位图=NULL)
+│       └── bitmapFileHeader    → BITMAPFILEHEADER (14字节，"BM"标识)
+│
+├── CProcessDib (ProcessDib.h/cpp)  — 图像处理核心（继承 CDib）
+│   │
+│   ├── 【预处理函数】
+│   │   ├── BinaryOperation(threshold) → 固定阈值二值化
+│   │   │     ├─ 灰度图: pixel >= threshold ? 255 : 0
+│   │   │     └─ 24位图: gray=(30R+59G+11B)/100 → 二值化 → 三通道统一
+│   │   ├── MakeGray()               → 24位彩色转灰度
+│   │   └── SaveOrigin(temp)         → 备份原始数据到临时缓冲区
+│   │
+│   ├── 【降噪函数】
+│   │   ├── EliminIsoSpots()         → 消除孤立黑点（8邻域黑点数≤1则置白）
+│   │   └── EliminIsoSpotsWhite()    → 消除孤立白点（对称逻辑）
+│   │
+│   ├── 【连通区域标记（两种算法）】
+│   │   ├── LabelNum()               → DFS栈式 4连通标记
+│   │   │     算法: vector<CPoint> 栈 + 4邻域扩展
+│   │   │     输出: p_temp[255=背景/1..x_sign=区域], flag[面积]
+│   │   │     限制: 最多250个区域
+│   │   │
+│   │   └── ConnectedRegions()       → Two-Pass并查集 8连通标记
+│   │         算法: First Pass(分配标签+合并) → Second Pass(扁平化+统计)
+│   │         输出: p_temp[标签图], flag[面积], pppp[坐标+面积+编号]
+│   │         额外: 弹出 SquareDlg 对话框显示面积结果
+│   │
+│   ├── 【后处理函数】
+│   │   ├── ClearSMALL(m_value)      → 消除面积 < m_value 的小区域
+│   │   └── Borderline()             → 边界提取 + 周长统计
+│   │         流程: LabelNum() → 8邻域边界检测 → 周长统计(fn[]) → LINEDLG
+│   │         额外: 填充 pppp[].pp_line 供视图标注
+│   │
+│   └── 【关键数据结构】
+│       ├── p_data(BYTE*)   → 原图像素数据指针
+│       ├── p_temp(BYTE*)   → 临时标签图 (255=背景, 1..x_sign=区域编号)
+│       ├── flag[255]       → 各连通区域面积
+│       ├── x_sign(int)     → 连通区域总数
+│       ├── pppp[255]       → 连通区域对象数组
+│       │   └── {pp_x, pp_y, pp_area, pp_line, pp_number}
+│       └── stop(int)       → 溢出标志 (>250区域时置1)
+│
+│
+├─────────────────────────────────────────────────────────────
+│  【三、对话框层（5 个对话框）】
+├─────────────────────────────────────────────────────────────
+│
+├── CThreshold       → 二值化阈值输入 (输入0~255灰度阈值)
+├── CYuZhi            → 旧版阈值对话框（未被使用）
+├── DELSMALL          → 小区域消除面积阈值输入
+├── SquareDlg         → 面积统计结果展示（区域数 + 总面积 + 各区域面积）
+└── LINEDLG           → 周长统计结果展示（区域数 + 总周长 + 各区域周长）
+│
+│
+├─────────────────────────────────────────────────────────────
+│  【四、核心数据流】
+├─────────────────────────────────────────────────────────────
+│
+│  用户打开 BMP 文件
+│       │
+│       ▼
+│  CDSplitDoc::OnFileopen()
+│    ├→ CDib.LoadFile()     → 解析 BMP → 存入 CDib（原图）
+│    └→ CDibNew.LoadFile()  → 解析 BMP → 存入 CProcessDib（工作副本）
+│       │
+│       ▼
+│  ┌─── 左视图 OnDraw() ──── StretchDIBits(CDib) ──→ 显示原图
+│  │
+│  │  ┌─── 右视图 OnDraw() ── StretchDIBits(CDibNew) ─→ 显示处理结果
+│  │  │
+│  ▼  ▼
+│  CDynSplitView2 菜单命令处理
+│       │
+│       ├─ CalArea() ──────────────────────────────────────┐
+│       │   clearmem() → BinaryOperation → ConnectedRegions │
+│       │   → 渲染 → 标注面积(pppp[].pp_area)               │
+│       │                                                    │
+│       ├─ OnA() ──────────────────────────────────────────┤
+│       │   clearmem() → BinaryOperation → ConnectedRegions │
+│       │   → 渲染 → 标注编号(pppp[].pp_number)             │
+│       │                                                    │
+│       ├─ OnDelSmall() ───────────────────────────────────┤
+│       │   clearmem() → BinaryOperation → ClearSMALL       │
+│       │   → 渲染                                           │
+│       │                                                    │
+│       └─ OnFollowline() ─────────────────────────────────┤
+│           clearmem() → BinaryOperation                    │
+│           → EliminIsoSpots → Borderline                   │
+│           → 渲染 → 标注周长(pppp[].pp_line)               │
+│                                                            │
+│  24位图特殊处理（每个流程入口都有）:                        │
+│    BinaryOperation 前 → SaveOrigin(备份) + MakeGray(转灰度) │
+│    BinaryOperation 后 → 叠加原图到结果上                     │
+│
+│
+├─────────────────────────────────────────────────────────────
+│  【五、关键算法对比】
+├─────────────────────────────────────────────────────────────
+│
+│  连通区域标记:
+│  ┌──────────────────┬──────────────────────────┬─────────────────────┐
+│  │     LabelNum()   │     ConnectedRegions()   │                     │
+│  ├──────────────────┼──────────────────────────┼─────────────────────┤
+│  │ 算法  │ DFS栈式  │ Two-Pass 并查集          │                     │
+│  │ 连通  │ 4连通    │ 8连通                    │                     │
+│  │ 内存  │ 栈可能大 │ O(n) 并查集数组          │                     │
+│  │ 场景  │ ClearSMALL│ CalArea/OnA (面积/编号) │                     │
+│  │       │ Borderline│                          │                     │
+│  └──────────────────┴──────────────────────────┴─────────────────────┘
+│
+│  像素索引计算（关键规则）:
+│    灰度图: p_data[y * DibWidth + x]
+│    24位图: p_data[y * DibWidth + x * 3]   ← DibWidth 已含3×宽度+对齐
+│    标签图: p_temp[y * wide + x]           ← wide 是像素宽，不含对齐
+│
+│
+├─────────────────────────────────────────────────────────────
+│  【六、文件清单】
+├─────────────────────────────────────────────────────────────
+│
+│  源代码 (.cpp/.h)  12对
+│  资源文件           4个 (DSplit.rc, resource.h, 2个ico, 1个bmp)
+│  测试图片           3张 (bacteriaCell, BloodCell, LymEndCell)
+│  项目配置           CppProperties.json, DSplit.sln, DSplit.dsp/dsw

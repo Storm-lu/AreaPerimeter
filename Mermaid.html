@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad:true});</script>
+</head>
+<body>
+<div class="mermaid">
+flowchart TD
+  AppStart["应用启动<br/>CDSplitApp::InitInstance"]
+  AppStart --> MainFrame["MainFrame 创建分割窗口"]
+  MainFrame --> LeftView["左视图<br/>CDSplitView<br/>显示原图"]
+  MainFrame --> RightView["右视图<br/>CDynSplitView2<br/>处理入口"]
+  RightView --> UserCmd["用户选择处理命令（CalArea/DelSmall/FollowLine/A/Save）"]
+  UserCmd --> Clearmem["clearmem(): 从文档拷贝原图 → CDibNew"]
+  Clearmem --> Is24{"是否为 24位彩色?"}
+  Is24 -->|是| SaveOrigin["SaveOrigin(): 备份原图"]
+  SaveOrigin --> MakeGray["MakeGray(): 转灰度"]
+  Is24 -->|否| AfterGray["直接继续"]
+  MakeGray --> AfterGray
+  AfterGray --> Binary["BinaryOperation(阈值二值化)"]
+  Binary --> OpsStart["处理操作入口"]
+  OpsStart --> EliminBlack["EliminIsoSpots<br/>消孤立黑点"]
+  OpsStart --> EliminWhite["EliminIsoSpotsWhite<br/>消孤立白点"]
+  OpsStart --> Conn["ConnectedRegions / LabelNum<br/>连通域标注 + 面积统计"]
+  OpsStart --> Border["Borderline<br/>边界提取 / 周长统计"]
+  EliminBlack --> ClearSmall
+  EliminWhite --> ClearSmall
+  Conn --> ClearSmall
+  Border --> ClearSmall["ClearSMALL<br/>按面积阈值删除小区域"]
+  ClearSmall --> Render["渲染到右视图 (StretchDIBits)"]
+  Render --> Annotate["在图上标注面积/周长（如需）"]
+  Annotate --> Save["OnFilesave(): 保存 BMP"]
+  Render --> Save
+</div>
+</body>
+</html>
+```
+

@@ -1,0 +1,9 @@
+CDSplitApp (应用入口 - Dsplit.h/cpp)
+  └── CMainFrame (主框架 - MainFrm.h/cpp)
+       ├── CToolBar + CStatusBar
+       └── CDynSplitterWnd (1行2列静态分割窗口)
+            ├── 左列: CDSplitView (原图显示 - Dsplitview.h/cpp)
+            └── 右列: CDynSplitView2 (处理结果+用户交互 - DynSplitView2.h/cpp)
+                 └── CDSplitDoc (文档数据 - DSplitDoc.h/cpp)
+                      ├── CDib (原始BMP图像 - Cdib.h/CDIB.CPP)
+                      └── CProcessDib (图像处理核心 - ProcessDib.h/cpp)
